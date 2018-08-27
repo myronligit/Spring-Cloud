@@ -16,7 +16,7 @@ public class HelloServerController {
 
     @RequestMapping(name = "hello", method = RequestMethod.GET)
     public String index(){
-        throw new RuntimeException("Testing throw exception!");
-        //return "Hello Spring Cloud, Service Port : " + port;
+        //throw new RuntimeException("Testing throw exception!");
+        return "Hello Spring Cloud, Service Port : " + port;
     }
 }
