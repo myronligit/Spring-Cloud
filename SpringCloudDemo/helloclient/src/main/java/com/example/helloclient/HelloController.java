@@ -56,6 +56,14 @@ public class HelloController {
         return "Test Thread!";
     }
 
+    @RequestMapping("/hello6")
+    public String hello6(){
+        for (int i = 0; i < 10; i++) {
+            new Thread(() -> System.out.println("Thread Pool Test === " + helloService.helloService())).start();
+        }
+        return "Test Thread!";
+    }
+
 
     public String fallBackIndex(Throwable t) {
         System.out.println(t.getMessage());
