@@ -15,15 +15,14 @@ public class HelloServerController {
     @RequestMapping("/hello")
     public String index(){
         //throw new RuntimeException("Testing throw exception!");
-        service.hello();
-        return "Hello Spring Cloud";
+        return service.hello();
     }
 
     @RequestMapping("/limit")
     public String limit(){
         for (int i = 0; i < 5; i++) {
             new Thread(() -> {
-                service.hello();
+                service.limit();
             }).start();
         }
         return "Test Limit";

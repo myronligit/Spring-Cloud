@@ -42,7 +42,7 @@ public class HelloController {
             @HystrixProperty(name = "circuitBreaker.sleepWindowInMilliseconds", value = "30000"),
             @HystrixProperty(name = "execution.isolation.thread.timeoutInMilliseconds", value = "1000")
     }, threadPoolKey = "hello4ThreadPool", threadPoolProperties = {
-            @HystrixProperty(name = "coreSize", value = "10")
+            @HystrixProperty(name = "coreSize", value = "2")
     })
     public String hello4(){
         return helloService.helloService();

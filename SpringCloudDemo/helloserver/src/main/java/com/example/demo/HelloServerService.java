@@ -9,10 +9,14 @@ public class HelloServerService {
     @Value("${server.port}")
     String port;
 
-    @RequestLimit
     public String hello(){
         System.out.println("hello service");
-        //throw new RuntimeException("Testing throw exception!");
+        return "Hello Spring Cloud, Service Port : " + port;
+    }
+
+    @RequestLimit
+    public String limit(){
+        System.out.println("hello limit");
         return "Hello Spring Cloud, Service Port : " + port;
     }
 }

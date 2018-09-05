@@ -1,5 +1,5 @@
 server:
-  port: 5557
+  port: 5556
   requestLimit: 2
 
 spring:
