@@ -13,9 +13,9 @@ ${errorMessage}
     <form action="/doRegist" name="regist" method="post">
         Regist:
         <br/>
-        username: <input type="text" name="username">
+        username: <input type="text" name="username"><span>${usernameValid}</span>
         <br/>
-        password: <input type="password" name="password">
+        password: <input type="password" name="password"><span>${passwordValid}</span>
         <br>
         <input type="submit" value="submit"/>
     </form>

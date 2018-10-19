@@ -5,6 +5,10 @@ import com.aaxis.microservice.training.demo1.service.UserService;
 import com.aaxis.microservice.training.demo1.util.SpringUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
+import org.springframework.ui.Model;
+import org.springframework.validation.BindingResult;
+import org.springframework.validation.FieldError;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -18,10 +22,17 @@ public class UserController {
     private UserService pUserService;
 
     @RequestMapping("/doLogin")
-    public String login(@ModelAttribute User pUser, HttpServletRequest request){
+    public String login(Model model, @ModelAttribute @Validated User pUser, BindingResult bindingResult, HttpServletRequest request){
+        if (bindingResult.hasErrors()) {
+            bindingResult.getAllErrors().forEach(e->{
+                FieldError fieldError = (FieldError) e;
+                model.addAttribute(fieldError.getField() + "Valid", e.getDefaultMessage());
+            });
+            return "forward:/login";
+        }
         User user = ((RestUserController) SpringUtil.getBean("restUserController")).login(pUser);
         if(user == null){
-            request.setAttribute("errorMessage", "Login error");
+            request.setAttribute("errorMessage", "Username or password is incorrect.");
             return "forward:/login";
         }
         request.getSession().setAttribute("user", user);
@@ -52,8 +63,14 @@ public class UserController {
     }
 
     @PostMapping("/doRegist")
-    public String doRegist(@ModelAttribute User user, HttpServletRequest request){
-        // validation, TODO
+    public String doRegist(Model model, @ModelAttribute @Validated User user, BindingResult bindingResult, HttpServletRequest request){
+        if (bindingResult.hasErrors()) {
+            bindingResult.getAllErrors().forEach(e->{
+                FieldError fieldError = (FieldError) e;
+                model.addAttribute(fieldError.getField() + "Valid", e.getDefaultMessage());
+            });
+            return "forward:/regist";
+        }
 
         try{
             User u = ((RestUserController) SpringUtil.getBean("restUserController")).doRegist(user);

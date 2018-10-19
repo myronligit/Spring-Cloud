@@ -5,6 +5,9 @@ import com.aaxis.microservice.training.demo1.dao.ProductDao;
 import com.aaxis.microservice.training.demo1.domain.Category;
 import com.aaxis.microservice.training.demo1.domain.Product;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.StringUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +18,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.querydsl.QSort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -40,12 +44,23 @@ public class ProductService {
     @Autowired
     private RestTemplate restTemplate;
 
-    private static  final int PRODUCT_BATCH_SIZE = 1000;
+    @Autowired
+    private RedisTemplate redisTemplate;
+
+    private static final int PRODUCT_BATCH_SIZE = 1000;
+
+    private static final String PRICE_CACHE_KEY_PREFIX = "price_";
+
+    private static final String INVENTORY_CACHE_KEY_PREFIX = "inventory_";
+
+    private static final Logger logger = LoggerFactory.getLogger(ProductService.class);
 
     public void initData() {
+        logger.info("Start to initial data...");
         List<Category> categories = mCategoryDao.findAll();
 
         if (categories == null) {
+            logger.warn("Category list is null.");
             return;
         }
         int maxProductCoundInCategory = Integer.parseInt(env.getProperty("maxProductCoundInCategory"));
@@ -76,15 +91,18 @@ public class ProductService {
                 productist.add(product);
 
                 if(productist.size() % PRODUCT_BATCH_SIZE == 0){
+                    logger.debug("Saving the product data...");
                     mProductDao.saveAll(productist);
                     productist.clear();
                 }
             }
 
             if(!productist.isEmpty()){
+                logger.debug("Saving the product data...");
                 mProductDao.saveAll(productist);
                 productist.clear();
             }
+            logger.info("End to initial data...");
         }
 
 
@@ -100,16 +118,7 @@ public class ProductService {
 
     public Page<Product> findProductsInPLP(String categoryId, int page, String sortName, String sortValue) {
         long startTime = System.currentTimeMillis();
-
-       /* Specification<Product> spec = new Specification<Product>() {
-            @Nullable
-            @Override
-            public Predicate toPredicate(Root<Product> pRoot, CriteriaQuery<?> pCriteriaQuery, CriteriaBuilder pCriteriaBuilder) {
-                Path<Category> name = pRoot.get("category");
-                Predicate p = pCriteriaBuilder.equal(name.as(Category.class), mCategoryDao.findById(categoryId).get());
-                return p;
-            }
-        };*/
+        logger.debug("Searching the products under category {} in page {} order by {} with {}", new Object[]{categoryId, page, sortName, sortValue});
 
         Specification<Product> spec = (Root<Product> r, CriteriaQuery<?> cq, CriteriaBuilder cb) -> {
             Path<Category> name = r.get("category");
@@ -129,26 +138,50 @@ public class ProductService {
         Page<Product> pageResult = mProductDao.findAll(spec, pageable);
         addPriceAndInventory(pageResult.getContent());
         long cost = System.currentTimeMillis()-startTime;
-        System.out.println("COST_TIME:"+cost);
+        logger.debug("The search cost: " + cost);
         return pageResult;
     }
 
     public Page<Product> searchProducts(int page, String productId, String name, String sortName, String sortValue) {
+        long startTime = System.currentTimeMillis();
+        logger.debug("Searching the products by productId {} and name {} in page {} order by {} with {}", new Object[]{productId, name, page, sortName, sortValue});
 
-        // implemente this method.
+        Specification<Product> spec = (Root<Product> r, CriteriaQuery<?> cq, CriteriaBuilder cb) -> {
+            List<Predicate> predicateList = new ArrayList<Predicate>();
+            if (StringUtils.isNotBlank(productId)) {
+                Predicate p = cb.like(r.get("id"), "%" + productId + "%");
+                predicateList.add(p);
+            }
+            if (StringUtils.isNotBlank(name)) {
+                Predicate p = cb.like(r.get("name"), "%" + name + "%");
+                predicateList.add(p);
+            }
 
-        return null;
+            return cb.and(predicateList.toArray(new Predicate[predicateList.size()]));
+        };
+
+        Pageable pageable = null;
+
+        if (sortName != null) {
+            Sort sort = new Sort("ASC".equalsIgnoreCase(sortValue) ? QSort.Direction.ASC : QSort.Direction.DESC, sortName);
+            pageable = new PageRequest(page-1, 20, sort);
+        } else {
+            pageable = new PageRequest(page-1, 20);
+        }
+
+        Page<Product> pageResult = mProductDao.findAll(spec, pageable);
+        addPriceAndInventory(pageResult.getContent());
+        long cost = System.currentTimeMillis()-startTime;
+        logger.debug("The search cost: " + cost);
+        return pageResult;
     }
 
     public void addPriceAndInventory(List<Product> products) {
+        logger.debug("Add price and inventory to product");
         products.forEach(product -> {
             product.setPrice(getProductPrice(product.getId()));
             product.setStock(getProductInventory(product.getId()));
         });
-        /*for (Product product : products) {
-            product.setPrice(getProductPrice(product.getId()));
-            product.setStock(getProductInventory(product.getId()));
-        }*/
     }
 
     @Bean
@@ -157,12 +190,28 @@ public class ProductService {
     }
 
     public double getProductPrice(String pProductId) {
+        if (redisTemplate.hasKey(PRICE_CACHE_KEY_PREFIX + pProductId)) {
+            logger.debug("Achieve the price from cache for product {}", pProductId);
+            Object object = redisTemplate.opsForValue().get(PRICE_CACHE_KEY_PREFIX + pProductId);
+            return (Double) object;
+        }
+
+        logger.debug("Achieve the price from service for product {}", pProductId);
         Double price = (Double) ((Map) restTemplate.getForObject("http://localhost:8081/price/" + pProductId, Map.class)).get("price");
+        redisTemplate.opsForValue().set(PRICE_CACHE_KEY_PREFIX + pProductId, price);
         return price;
     }
 
     public int getProductInventory(String pProductId) {
+        if (redisTemplate.hasKey(INVENTORY_CACHE_KEY_PREFIX + pProductId)) {
+            logger.debug("Achieve the inventory from cache");
+            Object object = redisTemplate.opsForValue().get(INVENTORY_CACHE_KEY_PREFIX + pProductId);
+            return (Integer) object;
+        }
+
+        logger.debug("Achieve the inventory from service for product {}", pProductId);
         Integer stock = (Integer) ((Map) restTemplate.getForObject("http://localhost:8082/inventory/" + pProductId, Map.class)).get("stock");
+        redisTemplate.opsForValue().set(INVENTORY_CACHE_KEY_PREFIX + pProductId, stock);
         return stock;
     }
 

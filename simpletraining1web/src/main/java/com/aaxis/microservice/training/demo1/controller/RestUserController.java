@@ -4,10 +4,7 @@ import com.aaxis.microservice.training.demo1.domain.User;
 import com.aaxis.microservice.training.demo1.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
-import org.springframework.web.bind.annotation.ModelAttribute;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 
@@ -19,7 +16,7 @@ public class RestUserController {
     private UserService pUserService;
 
     @RequestMapping("/doLogin")
-    public User login(@ModelAttribute User pUser){
+    public User login(@ModelAttribute @RequestBody User pUser){
         User user = pUserService.findUserByUserName(pUser);
         if(user == null || !user.getPassword().equals(pUser.getPassword())){
             return null;
@@ -28,7 +25,7 @@ public class RestUserController {
     }
 
     @PostMapping("/doRegist")
-    public User doRegist(@ModelAttribute User user){
+    public User doRegist(@ModelAttribute @RequestBody User user){
         // validation, TODO
 
         try{
